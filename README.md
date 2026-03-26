@@ -1,28 +1,29 @@
-# 🧩 Sudoku Duel — Backtracking vs Brute Force
+# Sudoku Duel — Backtracking vs Brute Force
 
-Interface visuelle Pygame qui fait s'affronter deux algorithmes de résolution de sudoku en temps réel, côte à côte.
+Interface Pygame qui oppose deux algorithmes de resolution de Sudoku en temps reel, cote a cote.
 
 ---
 
-## 📁 Structure du projet
+## Structure du projet
 
 ```
-sudoku-duel/
-├── main.py               # Contrôleur de jeu, threads, affichage terminal
-├── visuel.py             # Rendu Pygame (classe Renderer)
-├── grid.py               # Grille + algorithmes de résolution (SudokuGrid)
+Sudoku_Solver/
+├── main.py            # Controleur de jeu, threads, affichage terminal
+├── visuel.py          # Rendu Pygame (classe Renderer)
+├── grid.py            # Grille + algorithmes de resolution (SudokuGrid)
 ├── data/
-│   ├── sudoku.txt        # Facile
-│   ├── sudoku2.txt       # Moyen
-│   ├── sudoku3.txt       # Difficile
-│   ├── sudoku4.txt       # Difficile+
-│   └── evilsudoku.txt    # Evil
+│   ├── sudoku.txt     # Facile
+│   ├── sudoku2.txt    # Moyen
+│   ├── sudoku3.txt    # Difficile
+│   ├── sudoku4.txt    # Difficile+
+│   ├── evilsudoku.txt # Evil
+│   └── race.txt       # Race
 └── README.md
 ```
 
 ---
 
-## 🚀 Lancement
+## Lancement
 
 ```bash
 pip install pygame
@@ -31,104 +32,82 @@ python main.py
 
 ---
 
-## 🎮 Fonctionnement
+## Fonctionnement
 
-1. **Menu** — choisis un puzzle parmi 5 niveaux
-2. **Countdown** — décompte 3-2-1
-3. **Duel** — les deux algos tournent en parallèle (threads), la grille se remplit en live
-4. **Résultats** — podium, temps, complexité, et comparaison des performances
-5. **Stats** — moyennes par niveau sur la session en cours
+1. **Menu** — choix d'une categorie : Normal, Difficile ou Race
+2. **Countdown** — decompte 3-2-1 avec apercu des grilles
+3. **Duel** — les deux algorithmes tournent en parallele (threads), les grilles se remplissent en live
+4. **Resultats** — podium, temps, complexite, ratio de vitesse et moyenne du niveau
+5. **Stats** — tableau recapitulatif, diagramme en barres et moyennes globales sur la session
+
+Un puzzle est tire au hasard dans la categorie choisie a chaque partie.
 
 ---
 
-## ⚙️ Les deux algorithmes
+## Les deux algorithmes
 
-### Backtracking (`solve_backtracking`)
+### Backtracking + MRV (`solve_backtracking`)
 
-Algorithme récursif classique. À chaque case vide, il teste les valeurs 1-9 et n'explore que les branches valides grâce à `is_valid()`. Si une branche échoue, il revient en arrière (*backtrack*).
+Algorithme recursif avec heuristique **MRV** (Minimum Remaining Values) : a chaque etape, il choisit la case vide ayant le moins de candidats possibles, ce qui elague massivement l'arbre de recherche. Les contraintes (ligne, colonne, bloc) sont stockees dans des **sets** pour des verifications en O(1).
 
-- Complexité : **O(9^N)** dans le pire cas, mais les contraintes élaguent massivement l'espace de recherche
-- En pratique : très rapide, même sur les grilles "Evil"
+- Complexite : **O(9^N)** dans le pire cas, fortement reduite par le MRV
+- En pratique : tres rapide, meme sur les grilles Evil
 
 ### Brute Force (`solve_brute_force`)
 
-Même principe de backtracking, mais avec une structure de données différente pour les vérifications de contraintes.
+Meme principe de backtracking recursif, mais sans heuristique : les cases vides sont parcourues dans un **ordre fixe** (gauche vers droite, haut vers bas), sans choisir la plus contrainte. Utilise egalement des sets O(1) pour les verifications.
 
-#### Ancienne version (lente ❌)
+- Complexite : **O(9^N)** dans le pire cas
+- En pratique : plus lent que le backtracking car il explore davantage de branches
 
-```python
-# Vérifie la ligne, colonne et bloc en parcourant des listes → O(27) par test
-if n in grid[r]:           # O(9)
-if n in [grid[i][c] ...]   # O(9)
-for i in range(...):       # O(9)
-```
+### Comparaison
 
-Pire encore : l'ancienne implémentation **ne vérifiait pas les contraintes à chaque étape** — elle posait les chiffres et validait la grille entière une fois complète. Résultat : un espace de recherche de **9^55** sur un Evil sudoku (~55 cases vides). Impossible en temps raisonnable.
+| | Backtracking + MRV | Brute Force |
+|---|---|---|
+| Ordre d'exploration | Case la plus contrainte (MRV) | Ordre fixe (gauche-droite, haut-bas) |
+| Verification contraintes | Sets O(1) | Sets O(1) |
+| Complexite theorique | O(9^N) elague | O(9^N) elague |
+| Performance pratique | Plus rapide (moins de branches) | Plus lent (plus de branches) |
 
-#### Nouvelle version (optimisée ✅)
-
-```python
-# 3 sets de contraintes construits une seule fois en O(81)
-rows[r], cols[c], boxes[r//3][c//3]
-
-# Vérification O(1) par membership test (hash lookup)
-if n in rows[r] or n in cols[c] or n in boxes[br][bc]:
-    continue
-```
-
-Les sets sont **mis à jour dynamiquement** à chaque pose/retrait de chiffre. Cela permet d'élaguer les branches invalides immédiatement, comme le BT, mais avec un overhead de lookup minimal.
-
-| Opération | Liste | Set |
-|-----------|-------|-----|
-| Recherche `n in x` | O(n) | **O(1)** |
-| Ajout | O(1) | O(1) |
-| Suppression | O(n) | **O(1)** |
-
-**Gain mesuré sur `evilsudoku.txt` : ~200x plus rapide.**
+> **N** = nombre de cases vides. Sur un Sudoku Evil, N ~ 55.
 
 ---
 
-## 📊 Complexité algorithmique
+## Categories de puzzles
 
-| Algorithme | Complexité théorique | Lookups |
-|------------|----------------------|---------|
-| Backtracking | O(9^N) élagué | O(27) par test (listes) |
-| Brute Force (avant) | O(9^N) non élagué | aucun (validation finale) |
-| **Brute Force (après)** | **O(9^N) élagué** | **O(1) par test (sets)** |
-
-> **N** = nombre de cases vides. Sur un Sudoku Evil, N ≈ 55.
-
-En pratique, les deux algorithmes atteignent des performances similaires après optimisation — la différence visible en duel vient principalement de l'ordre d'exploration (identique ici) et des constantes cachées.
+| Categorie | Fichiers | Description |
+|-----------|----------|-------------|
+| **NORMAL** | `sudoku.txt`, `sudoku2.txt`, `sudoku3.txt`, `sudoku4.txt` | Facile a Difficile+ |
+| **DIFFICILE** | `evilsudoku.txt` | Grilles Evil |
+| **RACE** | `race.txt` | Mode course |
 
 ---
 
-## 🎨 Affichage
+## Affichage
 
-- **Blanc gras** — valeurs données dans le puzzle original
-- **Cyan** — valeurs trouvées par le Backtracking
-- **Jaune** — valeurs trouvées par la Brute Force
-- Le chronomètre central tourne jusqu'à ce que les deux algos aient terminé
-
----
-
-## 📈 Page Stats
-
-Accessible depuis le menu ou l'écran résultats. Affiche pour chaque niveau :
-- Temps moyen Backtracking
-- Temps moyen Brute Force
-- Nombre de runs effectués sur la session
-- Speedup global BT vs BF
-
-> Les stats sont en mémoire (session uniquement) — pas de persistance fichier.
+- **Blanc** — valeurs initiales du puzzle
+- **Cyan** — valeurs trouvees par le Backtracking
+- **Orange** — valeurs trouvees par la Brute Force
+- Le chronometre central tourne jusqu'a ce que les deux algorithmes aient termine
 
 ---
 
-## 🧠 Concepts clés (cours La Plateforme)
+## Page Stats
 
-Ce projet illustre plusieurs notions d'algorithmique :
+Accessible depuis le menu ou l'ecran resultats :
 
-- **Récursivité** — les deux solveurs s'appellent eux-mêmes jusqu'au cas de base (grille complète ou aucune case vide)
-- **Backtracking** — exploration avec retour en arrière sur les branches invalides
-- **Complexité temporelle** — comparaison O(9^N) élagué vs non élagué
-- **Structures de données** — impact concret des listes O(n) vs sets O(1) sur les performances
-- **Pile d'appels** — chaque appel récursif empile un état ; Python peut atteindre la limite (`RecursionError`) sur des grilles extrêmes
+- Tableau des temps moyens par categorie (BT vs BF)
+- Diagramme en barres groupe
+- Moyenne globale et ratio de vitesse BT/BF sur la session
+
+> Les stats sont en memoire (session uniquement) — pas de persistance fichier.
+
+---
+
+## Concepts cles
+
+- **Recursivite** — les deux solveurs s'appellent eux-memes jusqu'au cas de base
+- **Backtracking** — exploration avec retour en arriere sur les branches invalides
+- **Heuristique MRV** — choix de la case la plus contrainte pour reduire l'espace de recherche
+- **Structures de donnees** — impact des sets O(1) vs listes O(n) sur les performances
+- **Multithreading** — execution parallele des deux algorithmes via `threading.Thread`
