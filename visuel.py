@@ -141,8 +141,8 @@ class Renderer:
     #  Ecran MENU
     # ─────────────────────────────────────────────────────────────────────────
 
-    def draw_menu(self, mx, my, click, puzzle_files):
-        """Retourne (label, filepath) si puzzle cliqué, 'STATS' si stats, None sinon."""
+    def draw_menu(self, mx, my, click, puzzle_categories):
+        """Retourne le nom de catégorie si cliqué, 'STATS' si stats, None sinon."""
         self.screen.fill(DARK_BG)
 
         t = self.f_title.render("SUDOKU DUEL", True, CYAN)
@@ -153,21 +153,21 @@ class Renderer:
         pygame.draw.line(self.screen, CYAN,
                          (WIDTH//2 - 200, 142), (WIDTH//2 + 200, 142), 1)
 
-        choose = self.f_sub.render("Choisissez un puzzle :", True, WHITE)
+        choose = self.f_sub.render("Choisissez une difficulte :", True, WHITE)
         self.screen.blit(choose, choose.get_rect(centerx=WIDTH//2, y=165))
 
         bw, bh = 390, 56
         cx = WIDTH // 2
         result = None
 
-        for i, (label, filepath) in enumerate(puzzle_files):
+        for i, (category, _files) in enumerate(puzzle_categories):
             rect = pygame.Rect(cx - bw//2, 200 + i*(bh + 13), bw, bh)
             hov  = rect.collidepoint(mx, my)
-            self._btn(rect, label, hov)
+            self._btn(rect, category, hov)
             if click and hov:
-                result = (label, filepath)
+                result = category
 
-        stats_rect = pygame.Rect(cx - 175, 200 + len(puzzle_files)*(bh+13) + 10, 350, 52)
+        stats_rect = pygame.Rect(cx - 175, 200 + len(puzzle_categories)*(bh+13) + 10, 350, 52)
         hov_stats  = stats_rect.collidepoint(mx, my)
         self._btn(stats_rect, "STATISTIQUES", hov_stats,
                   color_on=PURPLE, color_off=(30, 18, 50))
@@ -258,7 +258,7 @@ class Renderer:
             (self.f_podium.render("1er", True, GOLD), 14),
             (self.f_podium.render(winner[0], True, winner[2]), 54),
             (self.f_timer.render(self._fmt(winner[1]), True, WHITE), 96),
-            (self.f_small.render("O(9^n) + elagage", True, GRAY), 148),
+            (self.f_small.render("O(9^n) + MRV", True, GRAY), 148),
         ]:
             self.screen.blit(surf, surf.get_rect(centerx=p1.centerx, y=p1.y+yoff))
 
@@ -273,7 +273,7 @@ class Renderer:
             (self.f_podium.render("2e", True, SILVER), 14),
             (self.f_podium.render(loser[0], True, loser[2]), 50),
             (self.f_podium.render(self._fmt(loser[1]), True, WHITE), 88),
-            (self.f_small.render("O(9^n) sans elagage", True, GRAY), 120),
+            (self.f_small.render("O(9^n) ordre fixe", True, GRAY), 120),
         ]:
             self.screen.blit(surf, surf.get_rect(centerx=p2.centerx, y=p2.y+yoff))
 
@@ -291,7 +291,7 @@ class Renderer:
         y0 += 20
         pygame.draw.line(self.screen, LINE_COL, (cx-330, y0-4), (cx+270, y0-4))
         for name, tv, _ in results:
-            cplx = "O(9^n) + elagage" if name == "Backtracking" else "O(9^n) sans elagage"
+            cplx = "O(9^n) + MRV" if name == "Backtracking" else "O(9^n) ordre fixe"
             for i, val in enumerate([name, cplx, self._fmt(tv)]):
                 self.screen.blit(self.f_small.render(val, True, WHITE), (hx[i], y0))
             y0 += 20
@@ -331,7 +331,7 @@ class Renderer:
     #  Ecran STATS
     # ─────────────────────────────────────────────────────────────────────────
 
-    def draw_stats(self, mx, my, click, puzzle_files, history):
+    def draw_stats(self, mx, my, click, puzzle_categories, history):
         """Retourne True si le bouton Retour est cliqué."""
         self.screen.fill(DARK_BG)
         cx = WIDTH // 2
@@ -346,7 +346,7 @@ class Renderer:
 
         # ── Tableau compact ───────────────────────────────────────────────
         col_x = [cx - 390, cx - 120, cx + 50, cx + 220]
-        col_h = ["Puzzle", "Moy. Backtracking", "Moy. Brute Force", "Runs"]
+        col_h = ["Niveau", "Moy. Backtracking", "Moy. Brute Force", "Runs"]
 
         y0 = 122
         self._rr(self.screen, PANEL2,
@@ -361,8 +361,8 @@ class Renderer:
         avgs_bf: list[float | None] = []
         short_labels: list[str]     = []
 
-        for idx, (lbl, _) in enumerate(puzzle_files):
-            data   = history.get(lbl, {"bt": [], "bf": []})
+        for idx, (cat, _files) in enumerate(puzzle_categories):
+            data   = history.get(cat, {"bt": [], "bf": []})
             bt_lst = data["bt"]
             bf_lst = data["bf"]
             runs   = len(bt_lst)
@@ -372,7 +372,7 @@ class Renderer:
 
             avgs_bt.append(avg_bt)
             avgs_bf.append(avg_bf)
-            short_labels.append(f"S{idx+1}")
+            short_labels.append(cat[:3])
 
             all_bt += bt_lst
             all_bf += bf_lst
@@ -381,9 +381,8 @@ class Renderer:
             self._rr(self.screen, row_bg,
                      pygame.Rect(cx - 410, y0 - 2, 820, 22), radius=4)
 
-            short  = lbl.split("—")[1].strip() if "—" in lbl else lbl
             self.screen.blit(
-                self.f_stat.render(f"Sudoku {idx+1} — {short}", True, WHITE),
+                self.f_stat.render(cat, True, WHITE),
                 (col_x[0], y0))
             self.screen.blit(
                 self.f_stat.render(self._fmt(avg_bt) if avg_bt else "—",
@@ -417,7 +416,7 @@ class Renderer:
         all_vals = [v for v in avgs_bt + avgs_bf if v is not None]
         max_val  = max(all_vals) if all_vals else 1.0
 
-        n        = len(puzzle_files)
+        n        = len(puzzle_categories)
         group_w  = chart_w // n
         bar_w    = max(14, group_w // 3)
         gap      = 6

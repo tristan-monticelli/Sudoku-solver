@@ -101,89 +101,60 @@ class SudokuGrid:
 
         return rows, cols, boxes
 
-    # ── BACKTRACKING ──────────────────────────────────────────────────────────
+    # ── BACKTRACKING + MRV ──────────────────────────────────────────────────────
+    #
+    # Différence avec la brute force :
+    #   - Pas de liste pré-calculée : scanne dynamiquement la grille à chaque appel
+    #   - Heuristique MRV (Minimum Remaining Values) : choisit la case vide
+    #     ayant le moins de valeurs possibles → élague massivement l'arbre
+    #   - Sets de contraintes O(1) pour les vérifications
+    #
+    # La brute force parcourt les cases dans un ordre fixe (gauche→droite,
+    # haut→bas). Le backtracking+MRV choisit toujours la case la plus
+    # contrainte, ce qui réduit le nombre de branches explorées.
 
     def solve_backtracking(self, callback=None) -> tuple["SudokuGrid | None", float]:
         grid = copy.deepcopy(self.grid)
+        rows, cols, boxes = self._build_constraint_sets(grid)
+
         start = time.perf_counter()
-        solved = self._backtrack(grid, callback)
+        solved = self._backtrack(grid, rows, cols, boxes, callback)
         elapsed = time.perf_counter() - start
         if solved:
             return SudokuGrid(grid, copy.deepcopy(self.initial_mask)), elapsed
         return None, elapsed
 
-    def _backtrack(self, grid: list[list[int]], callback) -> bool:
+    def _backtrack(self, grid, rows, cols, boxes, callback) -> bool:
+        # MRV : trouver dynamiquement la case vide avec le moins de candidats
+        best = None
+        best_count = 10
         for r in range(9):
             for c in range(9):
                 if grid[r][c] == 0:
+                    count = 0
                     for n in range(1, 10):
-                        if self.is_valid(r, c, n, grid):
-                            grid[r][c] = n
-                            if callback:
-                                callback(grid)
-                            if self._backtrack(grid, callback):
-                                return True
-                            grid[r][c] = 0
-                            if callback:
-                                callback(grid)
-                    return False
-        return True
+                        if n not in rows[r] and n not in cols[c] and n not in boxes[r // 3][c // 3]:
+                            count += 1
+                    if count == 0:
+                        return False  # case vide sans candidat → dead end
+                    if count < best_count:
+                        best_count = count
+                        best = (r, c)
+                        if count == 1:
+                            break  # on ne fera pas mieux
+            if best_count == 1:
+                break
 
-    # ── BRUTE FORCE OPTIMISÉE ─────────────────────────────────────────────────
-    #
-    # Différence vs l'ancienne version :
-    #   AVANT  — teste toutes les valeurs 1-9 sans vérification anticipée,
-    #            puis valide la grille entière à la fin → O(9^N) pur, N cases vides.
-    #            Pour un Evil sudoku (~55 cases vides) : potentiellement 9^55 états.
-    #
-    #   APRÈS  — on passe les valeurs invalides dès la pose grâce aux sets de
-    #            contraintes (lignes, colonnes, blocs) maintenus en O(1).
-    #            C'est toujours du backtracking "naïf" (pas de MRV / heuristiques),
-    #            mais on élimine les branches impossibles immédiatement.
-    #            Complexité pratique : même ordre que le BT classique mais affichage
-    #            reste distinct (couleur jaune) pour la comparaison visuelle.
-    #
-    # Pourquoi les sets ?
-    #   - Recherche dans une liste  : O(n)  → 9 éléments max, mais appelé ~millions de fois
-    #   - Recherche dans un set     : O(1)  → hash lookup, indépendant de la taille
-    #   Résultat mesuré sur evilsudoku.txt : ~200x plus rapide.
+        if best is None:
+            return True  # plus de case vide → résolu
 
-    def solve_brute_force(self, callback=None) -> tuple["SudokuGrid | None", float]:
-        grid  = copy.deepcopy(self.grid)
-        empty = [(r, c) for r in range(9) for c in range(9) if grid[r][c] == 0]
-        rows, cols, boxes = self._build_constraint_sets(grid)
-
-        start  = time.perf_counter()
-        solved = self._brute_force_opt(grid, empty, 0, rows, cols, boxes, callback)
-        elapsed = time.perf_counter() - start
-
-        if solved:
-            return SudokuGrid(grid, copy.deepcopy(self.initial_mask)), elapsed
-        return None, elapsed
-
-    def _brute_force_opt(
-        self,
-        grid:   list[list[int]],
-        empty:  list[tuple[int, int]],
-        idx:    int,
-        rows:   list[set],
-        cols:   list[set],
-        boxes:  list[list[set]],
-        callback,
-    ) -> bool:
-        # Cas de base : toutes les cases vides ont été remplies → solution trouvée
-        if idx == len(empty):
-            return True
-
-        r, c  = empty[idx]
+        r, c = best
         br, bc = r // 3, c // 3
 
         for n in range(1, 10):
-            # Vérification O(1) grâce aux sets (vs O(27) avec les listes)
             if n in rows[r] or n in cols[c] or n in boxes[br][bc]:
                 continue
 
-            # Pose du chiffre + mise à jour des contraintes
             grid[r][c] = n
             rows[r].add(n)
             cols[c].add(n)
@@ -192,10 +163,9 @@ class SudokuGrid:
             if callback:
                 callback(grid)
 
-            if self._brute_force_opt(grid, empty, idx + 1, rows, cols, boxes, callback):
+            if self._backtrack(grid, rows, cols, boxes, callback):
                 return True
 
-            # Backtrack : retrait du chiffre + rollback des contraintes
             grid[r][c] = 0
             rows[r].discard(n)
             cols[c].discard(n)
@@ -205,3 +175,56 @@ class SudokuGrid:
                 callback(grid)
 
         return False
+
+    # ── BRUTE FORCE ─────────────────────────────────────────────────────────────
+    #
+    # Différence avec le backtracking :
+    #   - Scan dynamique en ordre fixe (gauche→droite, haut→bas) :
+    #     prend la PREMIÈRE case vide trouvée, sans heuristique
+    #   - Sets de contraintes O(1) pour les vérifications
+    #   - Pas de MRV → explore plus de branches que le backtracking
+
+    def solve_brute_force(self, callback=None) -> tuple["SudokuGrid | None", float]:
+        grid = copy.deepcopy(self.grid)
+        rows, cols, boxes = self._build_constraint_sets(grid)
+
+        start   = time.perf_counter()
+        solved  = self._brute_force(grid, rows, cols, boxes, callback)
+        elapsed = time.perf_counter() - start
+
+        if solved:
+            return SudokuGrid(grid, copy.deepcopy(self.initial_mask)), elapsed
+        return None, elapsed
+
+    def _brute_force(self, grid, rows, cols, boxes, callback) -> bool:
+        # Ordre fixe : première case vide trouvée (gauche→droite, haut→bas)
+        for r in range(9):
+            for c in range(9):
+                if grid[r][c] == 0:
+                    br, bc = r // 3, c // 3
+
+                    for n in range(1, 10):
+                        if n in rows[r] or n in cols[c] or n in boxes[br][bc]:
+                            continue
+
+                        grid[r][c] = n
+                        rows[r].add(n)
+                        cols[c].add(n)
+                        boxes[br][bc].add(n)
+
+                        if callback:
+                            callback(grid)
+
+                        if self._brute_force(grid, rows, cols, boxes, callback):
+                            return True
+
+                        grid[r][c] = 0
+                        rows[r].discard(n)
+                        cols[c].discard(n)
+                        boxes[br][bc].discard(n)
+
+                        if callback:
+                            callback(grid)
+
+                    return False
+        return True

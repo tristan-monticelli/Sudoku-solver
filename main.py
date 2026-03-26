@@ -10,6 +10,7 @@ import threading
 import copy
 import sys
 import os
+import random
 
 from grid import SudokuGrid
 from visuel import Renderer
@@ -25,12 +26,10 @@ _MG = "\033[95m"
 _WH = "\033[97m"
 
 # ── Config ────────────────────────────────────────────────────────────────────
-PUZZLE_FILES = [
-    ("SUDOKU 1  —  Facile",      "sudoku.txt"),
-    ("SUDOKU 2  —  Moyen",       "sudoku2.txt"),
-    ("SUDOKU 3  —  Difficile",   "sudoku3.txt"),
-    ("SUDOKU 4  —  Difficile+",  "sudoku4.txt"),
-    ("SUDOKU 5  —  Evil",        "evilsudoku.txt"),
+PUZZLE_CATEGORIES = [
+    ("NORMAL",     ["sudoku.txt", "sudoku2.txt", "sudoku3.txt", "sudoku4.txt"]),
+    ("DIFFICILE",  ["evilsudoku.txt"]),
+    ("RACE",       ["race.txt"]),
 ]
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -132,7 +131,7 @@ class GameController:
         self.state = "MENU"
 
         self.history: dict[str, dict[str, list[float]]] = {
-            lbl: {"bt": [], "bf": []} for lbl, _ in PUZZLE_FILES
+            cat: {"bt": [], "bf": []} for cat, _ in PUZZLE_CATEGORIES
         }
 
         self.reset_run()
@@ -158,9 +157,13 @@ class GameController:
 
     # ── Chargement ────────────────────────────────────────────────────────────
 
-    def load_puzzle(self, label: str, filepath: str):
+    def load_puzzle(self, category: str):
+        for cat, files in PUZZLE_CATEGORIES:
+            if cat == category:
+                filepath = random.choice(files)
+                break
         self.current_file  = filepath
-        self.current_label = label
+        self.current_label = category
         path = os.path.join(DATA_DIR, filepath)
         sg = SudokuGrid.from_file(path)
         self.grid_bt      = copy.deepcopy(sg.grid)
@@ -221,13 +224,12 @@ class GameController:
 
             if self.state == "MENU":
                 saved = False
-                action = self.renderer.draw_menu(mx, my, click, PUZZLE_FILES)
+                action = self.renderer.draw_menu(mx, my, click, PUZZLE_CATEGORIES)
                 if action == "STATS":
                     self.state = "STATS"
                 elif action is not None:
-                    label, filepath = action
                     self.reset_run()
-                    self.load_puzzle(label, filepath)
+                    self.load_puzzle(action)
                     self.state    = "COUNTDOWN"
                     self.cd_start = time.time()
 
@@ -270,9 +272,9 @@ class GameController:
                     mx, my, click, self.current_label,
                     self.time_bt, self.time_bf, self.timer_val, h_data)
                 if action == "REPLAY":
-                    lbl, fp = self.current_label, self.current_file
+                    cat = self.current_label
                     self.reset_run()
-                    self.load_puzzle(lbl, fp)
+                    self.load_puzzle(cat)
                     self.state    = "COUNTDOWN"
                     self.cd_start = time.time()
                 elif action == "STATS":
@@ -282,7 +284,7 @@ class GameController:
                     self.state = "MENU"
 
             elif self.state == "STATS":
-                if self.renderer.draw_stats(mx, my, click, PUZZLE_FILES, self.history):
+                if self.renderer.draw_stats(mx, my, click, PUZZLE_CATEGORIES, self.history):
                     self.state = "MENU"
 
             self.renderer.flip()
