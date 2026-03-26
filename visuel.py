@@ -251,7 +251,7 @@ class Renderer:
         )
         winner, loser = results[0], results[1]
 
-        p1 = pygame.Rect(cx - 285, 140, 245, 178)
+        p1 = pygame.Rect(cx - 285, 140, 245, 195)
         self._rr(self.screen, (32, 28, 0), p1, 12)
         pygame.draw.rect(self.screen, GOLD, p1, width=3, border_radius=12)
         for surf, yoff in [
@@ -345,7 +345,7 @@ class Renderer:
         pygame.draw.line(self.screen, PURPLE, (cx-250, 108), (cx+250, 108), 1)
 
         # ── Tableau compact ───────────────────────────────────────────────
-        col_x = [cx - 390, cx - 120, cx + 50, cx + 220]
+        col_x = [cx - 390, cx - 180, cx + 60, cx + 300]
         col_h = ["Niveau", "Moy. Backtracking", "Moy. Brute Force", "Runs"]
 
         y0 = 122
@@ -454,10 +454,15 @@ class Renderer:
                          (chart_left + chart_w + 2, chart_bottom), 1)
 
         leg_y = chart_bottom + 22
-        for color, txt in [(CYAN, "■  Backtracking"), (ORANGE, "■  Brute Force")]:
-            s = self.f_small.render(txt, True, color)
-            offset = -100 if color == CYAN else 100
-            self.screen.blit(s, s.get_rect(centerx=cx + offset, y=leg_y))
+        sq_sz = 10
+        for color, label, offset in [(CYAN, "Backtracking", -100),
+                                     (ORANGE, "Brute Force", 100)]:
+            txt_s = self.f_small.render(label, True, color)
+            total_w = sq_sz + 6 + txt_s.get_width()
+            start_x = cx + offset - total_w // 2
+            pygame.draw.rect(self.screen, color,
+                             (start_x, leg_y + 2, sq_sz, sq_sz))
+            self.screen.blit(txt_s, (start_x + sq_sz + 6, leg_y))
 
         # ── Résumé global ─────────────────────────────────────────────────
         glob_bt    = sum(all_bt) / len(all_bt) if all_bt else None
